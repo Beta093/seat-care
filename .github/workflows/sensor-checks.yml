@@ -6,7 +6,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
-        with: {node-version: 22, cache: npm}
+        with: {node-version: 24, cache: npm}
       - run: npm ci
       - run: npm run check && npm test && npm run build
   android:
@@ -15,7 +15,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
-        with: {node-version: 22, cache: npm}
+        with: {node-version: 24, cache: npm}
       - uses: actions/setup-java@v4
         with: {distribution: temurin, java-version: 21}
       - uses: android-actions/setup-android@v3
@@ -29,6 +29,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
-        with: {node-version: 22, cache: npm}
+        with: {node-version: 24, cache: npm}
       - run: npm ci && npm run native:sync && npm run test:swift
       - run: xcodebuild -project ios/App/App.xcodeproj -scheme App -sdk iphonesimulator -configuration Debug CODE_SIGNING_ALLOWED=NO build

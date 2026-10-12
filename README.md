@@ -19,7 +19,11 @@ npm run dev
 - 로컬 웹: http://127.0.0.1:4180
 - `npm run build`: `dist/` 생성
 - Vercel: Framework Other / Build `npm run build` / Output `dist` / 루트 디렉터리는 이 저장소
-- `vercel.json` 포함. 실제 Vercel 프로젝트 생성·업로드·배포는 아직 수행하지 않았습니다.
+- GitHub: https://github.com/Beta093/seat-care (비공개)
+- 근로자 운영 웹: https://seat-care-worker.vercel.app
+- 관리자 운영 웹: https://seat-care-admin.vercel.app
+- Node 24.x. 두 Vercel 프로젝트 모두 같은 저장소의 `main`에 연결합니다. 관리자 프로젝트만 `SEAT_SITE=admin`, `SEAT_WORKER_URL=https://seat-care-worker.vercel.app`을 Production/Preview 환경변수로 사용합니다.
+- 로컬 Vercel 연결은 프로젝트별로 `vercel link --project seat-care-worker` 또는 `vercel link --project seat-care-admin`으로 선택합니다.
 - 웹은 HTTPS(로컬 테스트는 localhost)에서 지원 브라우저의 Web Bluetooth로 직접 연결합니다. Vercel은 HTTPS를 제공합니다.
 
 ## 보관 중인 설치 앱 코드 (현재 진행 범위 제외)
@@ -79,7 +83,7 @@ npm run native:ios
 
 ## 관리자와 기존 시연
 
-기존 웹·관리자 시연은 `npm run dev:demo`로 유지합니다 (근로자 4174 / 관리자 4173). 이 모드는 가상 서버 상태를 공유합니다. 새 실제 센서 기록은 관리자에게 자동 전송하지 않습니다. Vercel의 `/admin/`은 원격 공유 미연결 상태를 명시합니다. 계정별 권한·원격 저장소·동의 범위를 갖춘 관리자 연동은 별도 구현 대상입니다.
+기존 웹·관리자 시연은 `npm run dev:demo`로 유지합니다 (근로자 4174 / 관리자 4173). 이 모드는 가상 서버 상태를 공유합니다. 새 실제 센서 기록은 관리자에게 자동 전송하지 않습니다. Vercel의 관리자 전용 사이트와 근로자 웹 `/admin/`에는 기존 관리자 대시보드를 제공합니다. 최초 화면은 원격 공유 미연결이고, 사용자가 시작하는 가상 시연은 해당 브라우저 메모리에서만 실행됩니다. 시연을 종료하거나 새로고침하면 초기화됩니다. 실제 휴대폰·관리자 사이 동기화나 외부 알림 전송은 없습니다. 계정별 권한·원격 저장소·동의 범위를 갖춘 관리자 연동은 별도 구현 대상입니다.
 
 이전 문서는 `docs/legacy-readme-2026-10-07.md`에 보존했습니다. 현재 구현과 검증 경계는 [통합 보고서](docs/sensor-integration-2026-10-11.md)를 우선합니다.
 
