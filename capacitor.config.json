@@ -1,0 +1,6 @@
+{
+  "appId": "com.seatcare.worker",
+  "appName": "Seat Care",
+  "webDir": "dist",
+  "server": { "androidScheme": "https" }
+}

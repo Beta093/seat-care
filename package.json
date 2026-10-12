@@ -1,0 +1,44 @@
+{
+  "name": "seat-care",
+  "version": "0.2.0",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "dev": "npm run build && npm run preview",
+    "dev:mobile": "npm run dev",
+    "dev:admin": "npm run dev --workspace=@seat-care/admin-web",
+    "test": "node --test packages/shared/*.test.mjs",
+    "check": "node tools/check.mjs",
+    "build": "node tools/build.mjs",
+    "preview": "node tools/preview.mjs",
+    "native:sync": "npm run build && npx cap sync",
+    "native:ios": "npx cap open ios",
+    "native:android": "npx cap open android",
+    "dev:demo": "node tools/dev-server.mjs --both",
+    "test:swift": "node tools/check-swift-rules.mjs"
+  },
+  "dependencies": {
+    "@capacitor/android": "^8.5.3",
+    "@capacitor/core": "^8.5.3",
+    "@capacitor/ios": "^8.5.3",
+    "@zxing/browser": "^0.2.1",
+    "firebase": "^13.0.0"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^8.5.3",
+    "esbuild": "^0.28.2"
+  },
+  "overrides": {
+    "@grpc/grpc-js": "^1.13.6",
+    "xcode": {
+      "uuid": "^11.1.1"
+    }
+  }
+}

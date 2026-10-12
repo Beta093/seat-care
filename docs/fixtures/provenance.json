@@ -1,0 +1,14 @@
+{
+  "synthetic": true,
+  "personalData": false,
+  "legacyWriter": "seat-care-before-layout-v2/packages/shared/src/recording.js",
+  "legacyWriterSha256": "48486bf3b2aee8e51dfc95e5121615cb158a9bd73cdca7460106bb1e4d2ce88a",
+  "durationMs": 18000,
+  "frames": 61,
+  "files": {
+    "legacy-v1-demo.json": "a264207034c856797e39c330b0599ce360af588c71c3b696dd15e0ce54b7a66c",
+    "adopted-v2-demo.json": "0d7beb129e0c6c6bc55145cf229240a3d62b3258cde1f1d63a8926e778b69069",
+    "invalid-v2-layout-id.json": "8a244dbcfdb59096d7bab06e054e9046f8b746834d023b26721d020c58201440",
+    "invalid-v2-c1-position.json": "c0ba6e369efb36d15057b76cefe0acb74c6f0251a198e995bf6a55eda3bed7d7"
+  }
+}
