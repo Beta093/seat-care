@@ -8,5 +8,6 @@ docs
 android
 ios
 native
+apps/worker-flutter
 dist
 .vercel-*

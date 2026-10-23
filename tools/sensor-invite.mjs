@@ -1,0 +1,12 @@
+import {randomUUID} from 'node:crypto';
+import {writeFile} from 'node:fs/promises';
+import {issueToken} from '../api/telemetry.js';
+const secret=process.env.SENSOR_SHARE_SECRET,base=process.argv[2],out=process.argv[3]||'.env.sensor-invites.local';
+if(!secret||secret.length<32||!base)throw Error('SENSOR_SHARE_SECRET(32자 이상)과 서버 URL이 필요합니다. 예: node --env-file=.env.sensor.local tools/sensor-invite.mjs https://your-admin.vercel.app');
+const url=new URL(base);if(url.protocol!=='https:'&&!['localhost','127.0.0.1','10.0.2.2'].includes(url.hostname))throw Error('공개 서버는 HTTPS를 사용하세요.');
+const room=randomUUID(),expiresAt=Date.now()+30*86400000;
+const worker=new URL('/sensor/',url),admin=new URL('/sensor/',url);
+worker.hash=new URLSearchParams({key:issueToken(secret,room,'worker',expiresAt)}).toString();
+admin.hash=new URLSearchParams({key:issueToken(secret,room,'admin',expiresAt)}).toString();
+await writeFile(out,JSON.stringify({room,expiresAt:new Date(expiresAt).toISOString(),workerInvite:worker.href,adminInvite:admin.href},null,2),{mode:0o600,flag:'wx'});
+console.log(`사용자 앱용·관리자 웹용 초대를 ${out}에 저장했습니다. 링크 보유자가 해당 공유방에 접근할 수 있으므로 각각 지정한 사람에게만 전달하세요.`);

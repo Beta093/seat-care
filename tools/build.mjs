@@ -19,4 +19,18 @@ if(workerUrl&&(/^(https:\/\/[^"<>]+|\/)$/).test(workerUrl))html=html.replace('</
 await writeFile(`${adminDir}/index.html`,html);await cp('apps/admin-web/src/styles.css',`${adminDir}/src/styles.css`);await cp('apps/admin-web/favicon.svg',`${adminDir}/favicon.svg`);
 await build({entryPoints:['apps/admin-web/src/app.js'],bundle:true,outfile:`${adminDir}/src/app.js`,format:'esm',target:['es2022'],minify:true,define:{SEAT_HOSTED_ADMIN:'true'},plugins:[{name:'hosted-admin',setup(builder){builder.onResolve({filter:/^\/shared\//},args=>({path:args.path==='/shared/client.js'?resolve('apps/admin-web/src/hosted-client.js'):resolve('packages/shared/src',args.path.slice(8))}));}}]});
 await mkdir('dist/licenses',{recursive:true});await cp('vendor/esp32_telecommunication/LICENSE','dist/licenses/esp32_telecommunication.txt');
+await mkdir('dist/rehearsal',{recursive:true});
+await cp('apps/rehearsal/index.html','dist/rehearsal/index.html');
+await cp('apps/rehearsal/style.css','dist/rehearsal/style.css');
+await cp('apps/mobile-web/favicon.svg','dist/rehearsal/favicon.svg');
+await cp('apps/rehearsal/viewer.css','dist/rehearsal/viewer.css');
+await mkdir('dist/rehearsal/assets',{recursive:true});
+for(const [source,target] of [['apps/mobile-web/src/styles.css','worker-base.css'],['apps/mobile-web/src/worker.css','worker.css'],['apps/admin-web/src/styles.css','admin.css']])await cp(source,`dist/rehearsal/assets/${target}`);
+await build({loader:{'.html':'text'},entryPoints:['apps/rehearsal/app.js'],bundle:true,outfile:'dist/rehearsal/app.js',format:'esm',target:['es2022'],minify:true});
+await mkdir('dist/sensor',{recursive:true});
+for(const file of ['index.html','style.css'])await cp(`apps/admin-web/sensor/${file}`,`dist/sensor/${file}`);
+await build({entryPoints:['apps/admin-web/sensor/app.js'],bundle:true,outfile:'dist/sensor/app.js',format:'esm',target:['es2022'],minify:true});
+// Keep the original dashboard intact and expose the separate real-data view.
+const adminHtml=await readFile(`${adminDir}/index.html`,'utf8');
+await writeFile(`${adminDir}/index.html`,adminHtml.replace('</nav>','<a href="/sensor/">실제 센서 공유</a></nav>'));
 console.log(`Vercel assets ready: dist/ (${adminOnly?'admin':'worker + admin'})`);

@@ -22,12 +22,16 @@
     "native:ios": "npx cap open ios",
     "native:android": "npx cap open android",
     "dev:demo": "node tools/dev-server.mjs --both",
-    "test:swift": "node tools/check-swift-rules.mjs"
+    "test:swift": "node tools/check-swift-rules.mjs",
+    "dev:rehearsal": "npm run build && node tools/rehearsal-preview.mjs",
+    "dev:sensor": "npm run build && node tools/sensor-preview.mjs",
+    "sensor:invite": "node tools/sensor-invite.mjs"
   },
   "dependencies": {
     "@capacitor/android": "^8.5.3",
     "@capacitor/core": "^8.5.3",
     "@capacitor/ios": "^8.5.3",
+    "@vercel/blob": "^2.8.1",
     "@zxing/browser": "^0.2.1",
     "firebase": "^13.0.0"
   },
