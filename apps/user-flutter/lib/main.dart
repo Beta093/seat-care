@@ -104,14 +104,14 @@ enum AlertSensitivity {
 }
 
 abstract final class AppColors {
-  // Seat Care palette. Keeping it here lets the Firebase user and BLE domain
-  // remain unchanged.
-  static const corporateYellow = Color(0xff356b52);
-  static const ink = Color(0xff2c332d);
-  static const canvas = Color(0xfff5f2eb);
-  static const surface = Color(0xfffffdf8);
-  static const border = Color(0xffdedacf);
-  static const selected = Color(0xffe7efe6);
+  // Seat Care brand palette. The legacy corporateYellow identifier is retained
+  // to keep the color migration isolated from application behavior.
+  static const corporateYellow = Color(0xff2563eb);
+  static const ink = Color(0xff172033);
+  static const canvas = Colors.white;
+  static const surface = Colors.white;
+  static const border = Color(0xffdbe4f0);
+  static const selected = Color(0xffeaf1ff);
 }
 
 String bluetoothErrorMessage(Object error, {required String fallback}) {
