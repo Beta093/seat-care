@@ -3,6 +3,15 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 
+Future<void> dismissCoachMarks(WidgetTester tester) async {
+  await tester.pumpAndSettle();
+  final skip = find.byKey(const Key('skip-coach-marks'));
+  if (skip.evaluate().isNotEmpty) {
+    await tester.tap(skip);
+    await tester.pumpAndSettle();
+  }
+}
+
 void main() {
   testWidgets('login only shows account providers before authentication', (
     tester,
@@ -37,6 +46,7 @@ void main() {
 
   testWidgets('shows disconnected terminal screen', (tester) async {
     await tester.pumpWidget(const Esp32App(requestBluetoothOnLaunch: false));
+    await dismissCoachMarks(tester);
 
     expect(find.text('ESP32 압력 모니터'), findsOneWidget);
     expect(find.text('연결되지 않음'), findsOneWidget);
@@ -54,6 +64,7 @@ void main() {
     tester,
   ) async {
     await tester.pumpWidget(const Esp32App(requestBluetoothOnLaunch: false));
+    await dismissCoachMarks(tester);
 
     expect(find.text('홈'), findsOneWidget);
     expect(find.text('기기'), findsNothing);
@@ -347,7 +358,7 @@ void main() {
   ) async {
     await tester.pumpWidget(const MaterialApp(home: PressureDemoPage()));
 
-    expect(find.text('방석을 비워 주세요'), findsOneWidget);
+    expect(find.text('욕창방석만 올려주세요.'), findsOneWidget);
     await tester.ensureVisible(find.text('빈 방석 측정하기'));
     await tester.pump();
     await tester.tap(find.text('빈 방석 측정하기'));
@@ -394,7 +405,7 @@ void main() {
       ),
     );
 
-    expect(find.text('방석을 비워 주세요'), findsOneWidget);
+    expect(find.text('욕창방석만 올려주세요.'), findsOneWidget);
     expect(find.text('빈 방석 측정하기'), findsOneWidget);
     await tester.tap(find.text('빈 방석 측정하기'));
     expect(started, isTrue);

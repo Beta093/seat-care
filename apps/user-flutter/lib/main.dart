@@ -782,6 +782,9 @@ class _BleTerminalPageState extends State<BleTerminalPage> {
   static final Guid _txId = Guid('6E400003-B5A3-F393-E0A9-E50E24DCCA9E');
 
   final _devices = <DeviceIdentifier, ScanResult>{};
+  final _scanGuideKey = GlobalKey();
+  final _historyGuideKey = GlobalKey();
+  final _settingsGuideKey = GlobalKey();
 
   StreamSubscription<List<ScanResult>>? _scanSubscription;
   StreamSubscription<BluetoothConnectionState>? _connectionSubscription;
@@ -871,11 +874,10 @@ class _BleTerminalPageState extends State<BleTerminalPage> {
       onError: (Object error) => _reportBluetoothError(error, '기기 검색에 실패했습니다.'),
     );
 
-    if (widget.requestBluetoothOnLaunch) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        _requestBluetoothOnLaunch();
-      });
-    }
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (widget.requestBluetoothOnLaunch) await _requestBluetoothOnLaunch();
+      if (mounted) _showDemoGuide();
+    });
   }
 
   Future<void> _requestBluetoothOnLaunch() async {
@@ -909,6 +911,38 @@ class _BleTerminalPageState extends State<BleTerminalPage> {
     } catch (error) {
       debugPrint('알림 민감도 불러오기 오류: $error');
     }
+  }
+
+  Future<void> _showDemoGuide() async {
+    final steps = [
+      _CoachMarkStep(
+        targetKey: _scanGuideKey,
+        title: '방석을 연결해 보세요',
+        description: 'QR 코드를 스캔하면 내 방석을 빠르게 찾아 연결할 수 있어요.',
+      ),
+      _CoachMarkStep(
+        targetKey: _historyGuideKey,
+        title: '자세 기록을 확인해요',
+        description: '날짜별 자세 점수와 압력 변화를 여기에서 볼 수 있어요.',
+      ),
+      _CoachMarkStep(
+        targetKey: _settingsGuideKey,
+        title: '내게 맞게 설정해요',
+        description: '자세를 다시 보정하고 알림 민감도를 조절할 수 있어요.',
+      ),
+    ];
+    if (steps.any((step) => step.targetKey.currentContext == null)) return;
+    await showGeneralDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      barrierColor: Colors.transparent,
+      transitionDuration: const Duration(milliseconds: 180),
+      pageBuilder: (_, _, _) => _CoachMarkOverlay(steps: steps),
+      transitionBuilder: (_, animation, _, child) => FadeTransition(
+        opacity: animation,
+        child: child,
+      ),
+    );
   }
 
   Future<void> _setAlertSensitivity(AlertSensitivity value) async {
@@ -1945,6 +1979,7 @@ class _BleTerminalPageState extends State<BleTerminalPage> {
                                   ),
                                 )
                               : Icon(
+                                  key: _scanGuideKey,
                                   _pendingDeviceCode == null
                                       ? Icons.qr_code_scanner_rounded
                                       : Icons.bluetooth_searching_rounded,
@@ -2084,20 +2119,22 @@ class _BleTerminalPageState extends State<BleTerminalPage> {
       bottomNavigationBar: NavigationBar(
         selectedIndex: _selectedTab,
         onDestinationSelected: (index) => setState(() => _selectedTab = index),
-        destinations: const [
-          NavigationDestination(
+        destinations: [
+          const NavigationDestination(
             icon: Icon(Icons.home_outlined),
             selectedIcon: Icon(Icons.home_rounded),
             label: '홈',
           ),
           NavigationDestination(
-            icon: Icon(Icons.insights_outlined),
-            selectedIcon: Icon(Icons.insights_rounded),
+            key: _historyGuideKey,
+            icon: const Icon(Icons.insights_outlined),
+            selectedIcon: const Icon(Icons.insights_rounded),
             label: '기록',
           ),
           NavigationDestination(
-            icon: Icon(Icons.settings_outlined),
-            selectedIcon: Icon(Icons.settings_rounded),
+            key: _settingsGuideKey,
+            icon: const Icon(Icons.settings_outlined),
+            selectedIcon: const Icon(Icons.settings_rounded),
             label: '설정',
           ),
         ],
@@ -2427,7 +2464,7 @@ class CalibrationPanel extends StatelessWidget {
         ? '영점값을 측정하고 있어요'
         : warning
         ? '센서 상태를 확인해 주세요'
-        : '방석을 비워 주세요';
+        : '욕창방석만 올려주세요.';
     final description = checking
         ? 'ESP32에 저장된 최초 보정 정보를 불러옵니다.'
         : balance
@@ -4745,6 +4782,151 @@ class _CountBadge extends StatelessWidget {
       ),
     ),
   );
+}
+
+class _CoachMarkStep {
+  const _CoachMarkStep({
+    required this.targetKey,
+    required this.title,
+    required this.description,
+  });
+
+  final GlobalKey targetKey;
+  final String title;
+  final String description;
+}
+
+class _CoachMarkOverlay extends StatefulWidget {
+  const _CoachMarkOverlay({required this.steps});
+
+  final List<_CoachMarkStep> steps;
+
+  @override
+  State<_CoachMarkOverlay> createState() => _CoachMarkOverlayState();
+}
+
+class _CoachMarkOverlayState extends State<_CoachMarkOverlay> {
+  int _index = 0;
+
+  Rect _targetRect(GlobalKey key) {
+    final box = key.currentContext!.findRenderObject()! as RenderBox;
+    return box.localToGlobal(Offset.zero) & box.size;
+  }
+
+  void _next() {
+    if (_index == widget.steps.length - 1) {
+      Navigator.of(context).pop();
+    } else {
+      setState(() => _index++);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final step = widget.steps[_index];
+    final target = _targetRect(step.targetKey);
+    final screen = MediaQuery.sizeOf(context);
+    final targetCenter = target.center;
+    final radius = math.max(38.0, math.min(52.0, target.longestSide * .52));
+    final cardTop = targetCenter.dy > screen.height * .58
+        ? math.max(48.0, targetCenter.dy - radius - 190)
+        : math.min(screen.height - 210, targetCenter.dy + radius + 26);
+
+    return Material(
+      color: Colors.transparent,
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          CustomPaint(
+            painter: _CoachMarkPainter(center: targetCenter, radius: radius),
+          ),
+          Positioned(
+            top: 18,
+            right: 12,
+            child: TextButton(
+              key: const Key('skip-coach-marks'),
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('건너뛰기', style: TextStyle(color: Colors.white)),
+            ),
+          ),
+          Positioned(
+            top: cardTop,
+            left: 24,
+            right: 24,
+            child: Semantics(
+              container: true,
+              label: '${step.title}. ${step.description}',
+              child: Container(
+                padding: const EdgeInsets.all(20),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(18),
+                  boxShadow: const [
+                    BoxShadow(color: Color(0x40000000), blurRadius: 20, offset: Offset(0, 8)),
+                  ],
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '${_index + 1} / ${widget.steps.length}',
+                      style: const TextStyle(
+                        color: AppColors.corporateYellow,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      step.title,
+                      style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w900),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(step.description, style: const TextStyle(height: 1.45)),
+                    const SizedBox(height: 16),
+                    SizedBox(
+                      width: double.infinity,
+                      child: FilledButton(
+                        key: const Key('next-coach-mark'),
+                        onPressed: _next,
+                        child: Text(_index == widget.steps.length - 1 ? '시작하기' : '다음'),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _CoachMarkPainter extends CustomPainter {
+  const _CoachMarkPainter({required this.center, required this.radius});
+
+  final Offset center;
+  final double radius;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    canvas.saveLayer(Offset.zero & size, Paint());
+    canvas.drawRect(Offset.zero & size, Paint()..color = const Color(0xb35b5f66));
+    canvas.drawCircle(center, radius, Paint()..blendMode = BlendMode.clear);
+    canvas.restore();
+    canvas.drawCircle(
+      center,
+      radius + 3,
+      Paint()
+        ..color = AppColors.corporateYellow
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 4,
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant _CoachMarkPainter oldDelegate) =>
+      center != oldDelegate.center || radius != oldDelegate.radius;
 }
 
 class _DeviceCard extends StatelessWidget {
