@@ -4,7 +4,7 @@ export const labels = {
   alert_acknowledged: '사용자 안내 확인', relief_armed: '완화 확인 준비',
   relief_completed: '완화 조건 충족', relief_interrupted: '완화 확인 중단',
   data_lost: '관측 공백', help_requested: '도움 요청',
-  sharing_started: '관리자 공유 시작', sharing_stopped: '관리자 공유 중지',
+  notification_sent: '관리자 알림', sharing_started: '관리자 공유 시작', sharing_stopped: '관리자 공유 중지',
 };
 export const channelNames = ['왼쪽 앞', '오른쪽 앞', '왼쪽 뒤', '오른쪽 뒤', '꼬리뼈 쪽'];
 export const channelIds = ['L1', 'R1', 'L2', 'R2', 'C1'];
@@ -25,7 +25,10 @@ export function pendingRequests(state) {
 export function filterEvents(events, filter, search) {
   const types = {help: ['help_requested'], alert: ['alert_created', 'alert_acknowledged'], relief: ['relief_completed']};
   const text = search.trim().toLocaleLowerCase();
-  return [...events].reverse().filter(e => (!types[filter] || types[filter].includes(e.type)) && `${labels[e.type] || e.type} ${e.detail}`.toLocaleLowerCase().includes(text));
+  return [...events].reverse().filter(e => (!types[filter] || types[filter].includes(e.type)) && `${e.userName || ''} ${e.device || ''} ${labels[e.type] || e.type} ${e.detail}`.toLocaleLowerCase().includes(text));
+}
+export function userRecords(users) {
+  return users.flatMap(user => user.state.events.map(event => ({...event, userId: user.id, userName: user.name, device: user.state.snapshot.device}))).sort((a, b) => a.at - b.at);
 }
 export function normalizeUserCode(value) {
   const code = value.trim();
@@ -34,10 +37,42 @@ export function normalizeUserCode(value) {
 }
 // Explicit UI preview only. Never uploaded to the sensor API.
 export function previewState(now) {
-  return {snapshot: {source: 'demo', at: now, device: '미리보기 방석', connected: true, quality: 'seated', values: [620, 1100, 580, 1240, 680], baseline: [650, 650, 650, 650, 550], bias: ['R1', 'R2']}, acknowledgements: {}, events: [
-    {id: 'preview-baseline', type: 'baseline_registered', at: now - 32 * 60000, detail: '편안한 착석 상태에서 개인 기준을 등록했어요.'},
-    {id: 'preview-relief', type: 'relief_completed', at: now - 18 * 60000, detail: '선택 부위의 부하 감소가 20초 동안 유지됐어요.'},
-    {id: 'preview-alert', type: 'alert_created', at: now - 3 * 60000, detail: '오른쪽 부하 증가가 이어지고 있어요.'},
-    {id: 'preview-help', type: 'help_requested', at: now - 60000, detail: '사용자가 도움을 요청했어요.'},
+  return {snapshot: {source: 'demo', at: now, device: 'Seat Care · 01', connected: true, quality: 'seated', values: [620, 1100, 580, 1240, 680], baseline: [650, 650, 650, 650, 550], bias: ['R1', 'R2']}, acknowledgements: {}, events: [
+    {id: 'sample-baseline', type: 'baseline_registered', at: now - 32 * 60000, detail: '편안한 착석 상태에서 개인 기준을 등록했어요.'},
+    {id: 'sample-relief', type: 'relief_completed', at: now - 18 * 60000, detail: '선택 부위의 부하 감소가 20초 동안 유지됐어요.'},
+    {id: 'sample-alert', type: 'alert_created', at: now - 3 * 60000, detail: '오른쪽 부하 증가가 이어지고 있어요.'},
+    {id: 'sample-help', type: 'help_requested', at: now - 60000, detail: '사용자가 도움을 요청했어요.'},
   ]};
+}
+
+export function sampleUsers(now) {
+  const first = previewState(now);
+  const second = previewState(now);
+  second.snapshot.device = 'Seat Care · 02';
+  second.snapshot.values = [640, 660, 630, 670, 560];
+  second.snapshot.bias = [];
+  second.events = [
+    {id: '02-baseline', type: 'baseline_registered', at: now - 50 * 60000, detail: '개인 착석 기준을 등록했어요.'},
+    {id: '02-relief-1', type: 'relief_completed', at: now - 25 * 60000, detail: '왼쪽 부하를 줄이고 편안한 자세로 돌아왔어요.'},
+    {id: '02-relief-2', type: 'relief_completed', at: now - 8 * 60000, detail: '선택 부위의 부하 감소가 20초 동안 유지됐어요.'},
+  ];
+  const third = previewState(now);
+  third.snapshot.device = 'Seat Care · 03';
+  third.snapshot.values = [1280, 640, 1350, 610, 740];
+  third.snapshot.bias = ['L1', 'L2'];
+  third.events = [
+    {id: '03-baseline', type: 'baseline_registered', at: now - 45 * 60000, detail: '개인 착석 기준을 등록했어요.'},
+    {id: '03-alert', type: 'alert_created', at: now - 5 * 60000, detail: '왼쪽 부하 증가가 이어지고 있어요.'},
+    {id: '03-help', type: 'help_requested', at: now - 2 * 60000, detail: '자세를 바꾸는 데 도움이 필요해요.'},
+  ];
+  return [
+    {id: '01', name: '김민수', seatedSince: now - 5546000, state: first},
+    {id: '02', name: '이서연', seatedSince: now - 3822000, state: second},
+    {id: '03', name: '박지훈', seatedSince: now - 2979000, state: third},
+  ];
+}
+
+export function seatedDuration(since, now) {
+  const seconds = Math.max(0, Math.floor((now - since) / 1000));
+  return `${Math.floor(seconds / 3600)}:${String(Math.floor(seconds / 60) % 60).padStart(2, '0')}:${String(seconds % 60).padStart(2, '0')}`;
 }

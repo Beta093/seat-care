@@ -1,6 +1,6 @@
 import {pressureField} from '/admin/shared/sensor.js';
 import {CHANNELS} from '/admin/shared/layout.js';
-import {labels, channelIds, channelNames, currentView, pendingRequests, filterEvents, normalizeUserCode, previewState} from './model.js';
+import {labels, channelIds, channelNames, currentView, pendingRequests, filterEvents, normalizeUserCode, sampleUsers, seatedDuration, userRecords} from './model.js';
 
 const $ = selector => document.querySelector(selector);
 const $$ = selector => [...document.querySelectorAll(selector)];
@@ -11,16 +11,33 @@ const storage = {
   set(key, value) { try {sessionStorage.setItem(key, value);} catch { /* Session can still run without persistence. */ } },
   remove(key) { try {sessionStorage.removeItem(key);} catch { /* No persistent token exists in this context. */ } },
 };
-let token = new URLSearchParams(location.hash.slice(1)).get('key') || storage.get('seat-care-admin') || '';
+let token = new URLSearchParams(location.hash.slice(1)).get('key') || '';
 let endpoint = storage.get('seat-care-admin-endpoint') || `${location.origin}/api/telemetry`;
 if (location.hash) history.replaceState(null, '', location.pathname + location.search);
 let state = null, room = '', online = false, demo = false, busy = false, page = 'overview', filter = 'all', search = '';
 let timer, abort, generation = 0, offset = 0, lastSuccess = 0;
+let users = [], selectedUser = '01';
 const signatures = new Map();
+const detailDialog = $('#user-detail');
+function closeDetail() {
+  if (detailDialog.open) detailDialog.close();
+  document.body.classList.remove('detail-open');
+}
+detailDialog.addEventListener('close', () => {
+  document.body.classList.remove('detail-open');
+  paint();
+  if (demo && page === 'overview') $(`[data-user="${selectedUser}"]`)?.focus({preventScroll: true});
+});
+$('#close-detail').onclick = closeDetail;
+detailDialog.addEventListener('click', e => {
+  const bounds = detailDialog.getBoundingClientRect();
+  if (e.target === detailDialog && (e.clientX < bounds.left || e.clientX > bounds.right || e.clientY < bounds.top || e.clientY > bounds.bottom)) closeDetail();
+});
 $('#today').textContent = new Date().toLocaleDateString('ko-KR', {year:'numeric', month:'long', day:'numeric', weekday:'long'});
 $('#sensor-points').innerHTML = channelIds.map((id, i) => `<span class="point" title="${channelNames[i]}" style="left:${CHANNELS[id].x * 100}%;top:${CHANNELS[id].y * 100}%"></span>`).join('');
 
 function showPage(next) {
+  closeDetail();
   page = next;
   $$('.page').forEach(el => el.hidden = el.id !== `${page}-page`);
   $$('[data-page]').forEach(el => {
@@ -44,14 +61,15 @@ function setFilter(next) {
 }
 function draw(values) {
   const canvas = $('#map'), ctx = canvas.getContext('2d');
-  ctx.fillStyle = '#E7EFE6'; ctx.fillRect(0, 0, 240, 300);
+  ctx.fillStyle = '#3B424D'; ctx.fillRect(0, 0, 240, 300);
   if (values) {
     pressureField(values, 60, 48).forEach((row, y) => row.forEach((value, x) => {
       const p = Math.max(0, Math.min(1, value / 3200));
-      const start = p < .5 ? [231,239,230] : [53,107,82];
-      const end = p < .5 ? [53,107,82] : [166,91,25];
+      // Match the user app's _pressureHeatColor palette and 3200 display maximum.
+      const start = p < .5 ? [156,221,207] : [255,209,102];
+      const end = p < .5 ? [255,209,102] : [255,92,92];
       const t = p < .5 ? p * 2 : (p - .5) * 2;
-      ctx.fillStyle = `rgb(${start.map((v, i) => Math.round(v + (end[i] - v) * t)).join(',')})`;
+      ctx.fillStyle = p < .04 ? '#3B424D' : `rgb(${start.map((v, i) => Math.round(v + (end[i] - v) * t)).join(',')})`;
       ctx.fillRect(x * 5, y * 5, 5, 5);
     }));
   }
@@ -62,12 +80,14 @@ function draw(values) {
 function eventsHtml(events, allowActions = true) {
   if (!events.length) return '<li class="empty">표시할 기록이 없어요.</li>';
   return events.map(e => {
-    const ack = state?.acknowledgements[e.id];
+    const ownerState = demo && e.userId ? users.find(user => user.id === e.userId)?.state : state;
+    const ack = ownerState?.acknowledgements[e.id];
+    const owner = e.userName ? `<span class="event-owner">${escape(e.userName)}<small>${escape(e.device)}</small></span>` : '';
     const action = allowActions && ['help_requested', 'alert_created'].includes(e.type)
       ? ack ? `<span class="ack">확인 완료<time>${time(ack.at)}</time></span>`
-        : `<button data-ack="${escape(e.id)}" ${busy || (!demo && !online) ? 'disabled' : ''}>${demo ? '예시 확인' : '안내 확인'}</button>`
+        : `<button data-ack="${escape(e.id)}" data-owner="${escape(e.userId || '')}" aria-label="${escape(e.userName || '사용자')} ${escape(labels[e.type] || e.type)} 확인" ${busy || (!demo && !online) ? 'disabled' : ''}>안내 확인</button>`
       : '';
-    return `<li><div class="event-content"><time datetime="${new Date(e.at).toISOString()}">${time(e.at)}</time><strong class="${e.type === 'help_requested' ? 'help-label' : ''}">${escape(labels[e.type] || e.type)}</strong><p>${escape(e.detail)}</p></div>${action}</li>`;
+    return `<li><div class="event-content">${owner}<time datetime="${new Date(e.at).toISOString()}">${time(e.at)}</time><strong class="${e.type === 'help_requested' ? 'help-label' : ''}">${escape(labels[e.type] || e.type)}</strong><p>${escape(e.detail)}</p></div>${action}</li>`;
   }).join('');
 }
 function updateList(selector, events, actions) {
@@ -81,19 +101,45 @@ function paint() {
   const pending = pendingRequests(state), events = state?.events || [];
   const helpCount = pending.filter(e => e.type === 'help_requested').length;
   $('#join').hidden = demo || !!state;
-  $('#demo-banner').hidden = !demo;
-  $('#connection').textContent = demo ? '예시 데이터' : online ? '공유 서버 연결됨' : token ? '공유 연결 확인 중' : '공유 연결 전';
-  $('#connection').className = `connection${demo ? ' caution' : online ? ' live' : ''}`;
+  $('#user-picker').hidden = !demo || page !== 'overview';
+  $('#main').classList.toggle('group-mode', demo);
+  const overview = $('#overview-page');
+  if (demo && overview.parentElement !== $('#sheet-content')) $('#sheet-content').append(overview);
+  else if (!demo && overview.parentElement === $('#sheet-content')) {
+    closeDetail();
+    $('#overview-anchor').after(overview);
+  }
+  overview.hidden = demo ? !detailDialog.open : page !== 'overview';
+  $('#sheet-notice').textContent = $('#notice').textContent;
+  $('#session-duration').hidden = !demo;
+  $('#detail-title').textContent = demo ? users.find(user => user.id === selectedUser).name : '현재 상태';
+  $('#detail-description').textContent = demo ? '현재 착석 상태와 요청을 살펴보세요.' : '방석의 압력과 사용자의 안내 요청을 확인하세요.';
+  if (demo) {
+    const user = users.find(user => user.id === selectedUser);
+    $('#selected-user').textContent = detailDialog.open ? `${user.name}님의 상세 상태를 보고 있어요` : '사용자를 눌러 상세 상태를 확인하세요';
+    $('#seated-time').textContent = seatedDuration(user.seatedSince, now);
+    $('#group-attention').textContent = `압력 완화 필요 ${users.filter(user => user.state.snapshot.bias.length).length}명`;
+    const cards = users.map(user => {
+      const requests = pendingRequests(user.state).length;
+      const status = user.state.snapshot.bias.length ? '압력 완화 필요' : '안정적인 착석';
+      return `<button class="user-card" data-user="${user.id}" aria-pressed="${detailDialog.open && user.id === selectedUser}" aria-haspopup="dialog" aria-controls="user-detail"><span class="seat-illustration" aria-hidden="true"><svg viewBox="0 0 80 80"><path d="M25 16v29c0 5 4 8 9 8h25M20 57h43M27 57l-5 15M57 57l5 15M26 21h27v20H26M53 41l9 12"/><circle cx="64" cy="16" r="10"/><path d="M64 10v6l4 3"/></svg></span><strong>${escape(user.name)}</strong><span class="user-duration" data-duration="${user.id}"></span><span class="user-status">${status}</span><span class="user-request">${requests ? '미확인 요청 ' + requests + '건' : '미확인 요청 없음'}</span></button>`;
+    }).join('');
+    if (signatures.get('users') !== cards) {$('#user-list').innerHTML = cards; signatures.set('users', cards);}
+    $$('[data-duration]').forEach(el => {el.textContent = seatedDuration(users.find(user => user.id === el.dataset.duration).seatedSince, now);});
+  }
+  $('#connection').textContent = demo ? '압력 데이터' : online ? '공유 서버 연결됨' : token ? '공유 연결 확인 중' : '공유 연결 전';
+  $('#connection').className = `connection${demo ? '' : online ? ' live' : ''}`;
   $('#refresh').disabled = busy || (!token && !demo);
   $('#disconnect').disabled = !token && !demo;
-  $('#room-label').textContent = demo ? '미리보기 공유방' : room ? `공유방 ${room.slice(0, 8)}` : '연결된 공유방 없음';
-  $('#summary-state').textContent = demo ? '예시 연결' : !s ? '연결 대기' : view.fresh ? '수신 중' : '수신 중단';
+  $('#room-label').textContent = demo ? `${users.find(user => user.id === selectedUser).name} · ${s.device}` : room ? `공유방 ${room.slice(0, 8)}` : '연결된 공유방 없음';
+  $('#summary-state').textContent = demo ? '사용 중' : !s ? '연결 대기' : view.fresh ? '수신 중' : '수신 중단';
   $('#summary-device').textContent = s?.device || '사용자 앱에서 공유를 켜 주세요';
   $('#help-count').textContent = state ? helpCount : '—';
   $('#completed').textContent = state ? events.filter(e => e.type === 'relief_completed').length : '—';
-  $('#nav-count').textContent = helpCount;
-  $('#nav-count').hidden = helpCount === 0;
-  $('#data-kind').textContent = demo ? '예시 데이터' : view.fresh ? '실제 센서' : '수신 대기';
+  const totalHelp = demo ? users.reduce((count, user) => count + pendingRequests(user.state).filter(event => event.type === 'help_requested').length, 0) : helpCount;
+  $('#nav-count').textContent = totalHelp;
+  $('#nav-count').hidden = totalHelp === 0;
+  $('#data-kind').textContent = demo ? '압력 데이터' : view.fresh ? '실제 센서' : '수신 대기';
   $('#state-title').textContent = view.title;
   $('#guidance').textContent = view.guidance;
   $('.current-panel').dataset.tone = view.tone;
@@ -106,14 +152,13 @@ function paint() {
   }
   updateList('#requests', pending.slice(0, 2), true);
   updateList('#recent-events', [...events].reverse().slice(0, 3), false);
-  const filtered = filterEvents(events, filter, search);
+  const records = demo ? userRecords(users) : events.map(event => ({...event, userName: s?.device || '연결된 사용자', device: room ? `공유방 ${room.slice(0, 8)}` : ''}));
+  const filtered = filterEvents(records, filter, search);
   updateList('#events', filtered, true);
-  $('#records-meta').textContent = `${filtered.length}개 기록 · 최근 90일, 최대 2,000개${demo ? ' · 미리보기' : ''}`;
-  $('#settings-connection').textContent = demo ? '미리보기 · 실제 센서 미연결' : online ? '공유 서버 연결됨' : '연결 전 또는 수신 중단';
+  $('#records-meta').textContent = demo ? `사용자 ${users.length}명 · ${filtered.length}개 기록 · 최신순` : `${filtered.length}개 기록 · 최근 90일, 최대 2,000개`;
+  $('#settings-connection').textContent = demo ? '저장된 데이터' : online ? '공유 서버 연결됨' : '연결 전 또는 수신 중단';
   $('#settings-device').textContent = s?.device || '—';
-  const notificationDisabled = busy || demo || !online;
-  $('#overview-notify-submit').disabled = notificationDisabled;
-  $('#notify-submit').disabled = notificationDisabled;
+  $('#disconnect').textContent = demo ? '다른 방석 연결' : '공유방 연결 종료';
 }
 function fail(error) {
   online = false;
@@ -148,8 +193,7 @@ async function refresh(body) {
     storage.set('seat-care-admin', requestToken);
     storage.set('seat-care-admin-endpoint', endpoint);
     $('#error').hidden = true;
-    if (body?.action === 'notify') $('#notice').textContent = '사용자에게 알림을 보냈어요.';
-    else if (body) $('#notice').textContent = '관리자 확인을 기록했어요.';
+    if (body) $('#notice').textContent = '관리자 확인을 기록했어요.';
   } catch (error) {
     if (current === generation) fail(error.name === 'AbortError' ? Error('연결 시간이 초과됐어요. 다시 시도해 주세요.') : error);
   } finally {
@@ -165,7 +209,7 @@ function leave() {
   storage.remove('seat-care-admin'); storage.remove('seat-care-admin-endpoint'); $('#error').hidden = true; signatures.clear();
   const url = new URL(location.href); url.searchParams.delete('preview');
   history.replaceState(null, '', url.pathname + url.search);
-  showPage('overview'); $('#invite').focus();
+  $('#notice').textContent = ''; showPage('overview'); $('#invite').focus();
 }
 $('#join-form').addEventListener('submit', e => {
   e.preventDefault();
@@ -187,45 +231,31 @@ async function connectWithCode(value) {
 }
 function startPreview() {
   stop(); token = ''; storage.remove('seat-care-admin'); demo = true; offset = 0;
-  state = previewState(Date.now()); $('#error').hidden = true; signatures.clear(); paint();
+  if (!users.length) users = sampleUsers(Date.now());
+  state = users.find(user => user.id === selectedUser).state;
+  $('#notice').textContent = ''; $('#error').hidden = true; signatures.clear(); paint();
 }
-$('#preview').onclick = startPreview;
-$('#exit-demo').onclick = leave;
+$('#user-list').onclick = e => {
+  const button = e.target.closest('[data-user]');
+  if (!demo || !button) return;
+  const user = users.find(user => user.id === button.dataset.user);
+  if (!user) return;
+  selectedUser = user.id; state = user.state;
+  search = ''; $('#search').value = ''; $('#notice').textContent = '';
+  setFilter('all');
+  showPage('overview');
+  detailDialog.showModal();
+  document.body.classList.add('detail-open');
+  paint();
+  detailDialog.scrollTop = 0;
+  $('#close-detail').focus({preventScroll: true});
+};
+$('#sample-data').onclick = startPreview;
 $('#disconnect').onclick = leave;
 $('#refresh').onclick = () => refresh();
 $$('[data-page]').forEach(button => button.onclick = () => showPage(button.dataset.page));
 $$('[data-filter]').forEach(button => button.onclick = () => setFilter(button.dataset.filter));
 $('#search').oninput = e => {search = e.target.value; paint();};
-async function sendUserNotification(input, count) {
-  const message = input.value.trim();
-  if (!message || busy || (!demo && !online)) return;
-  if (demo) {
-    $('#notice').textContent = '미리보기에서는 실제 알림을 보내지 않아요.';
-    return;
-  }
-  await refresh({action: 'notify', message});
-  if (online) {input.value = ''; count.textContent = '0 / 300';}
-}
-[
-  ['#overview-notify-form', '#overview-notify-message', '#overview-notify-count'],
-  ['#notify-form', '#notify-message', '#notify-count'],
-].forEach(([formSelector, inputSelector, countSelector]) => {
-  const form = $(formSelector), input = $(inputSelector), count = $(countSelector);
-  input.oninput = () => {count.textContent = `${input.value.length} / 300`;};
-  form.addEventListener('submit', e => {
-    e.preventDefault();
-    sendUserNotification(input, count);
-  });
-});
-$$('[data-notify-message]').forEach(button => {
-  button.onclick = () => {
-    const form = button.closest('form');
-    const input = form.querySelector('textarea');
-    input.value = button.dataset.notifyMessage;
-    input.dispatchEvent(new Event('input'));
-    input.focus();
-  };
-});
 $('#view-help').onclick = () => {setFilter('help'); showPage('records');};
 $('#view-requests').onclick = () => {setFilter('all'); showPage('records');};
 $$('[data-open-records]').forEach(button => button.onclick = () => {setFilter('all'); showPage('records');});
@@ -233,8 +263,10 @@ document.addEventListener('click', e => {
   const button = e.target.closest('[data-ack]');
   if (!button || button.disabled) return;
   if (demo) {
-    state.acknowledgements[button.dataset.ack] = {at: Date.now()};
-    $('#notice').textContent = '미리보기 요청을 확인했어요. 실제 요청을 처리하지 않았어요.';
+    const owner = users.find(user => user.id === (button.dataset.owner || selectedUser));
+    if (!owner || !owner.state.events.some(event => event.id === button.dataset.ack)) return;
+    owner.state.acknowledgements[button.dataset.ack] = {at: Date.now()};
+    $('#notice').textContent = `${owner.name}님의 요청 확인을 기록했어요.`;
     paint();
   } else refresh({action: 'acknowledge', eventId: button.dataset.ack});
 });
@@ -253,5 +285,5 @@ setInterval(() => {
 document.addEventListener('visibilitychange', () => {
   if (document.hidden) {stop(); online = false; paint();} else refresh();
 });
-if (!token && new URLSearchParams(location.search).get('preview') === '1') startPreview();
+if (!token) startPreview();
 else {paint(); refresh();}
