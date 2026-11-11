@@ -60,7 +60,7 @@ void main() {
     await tester.pumpWidget(const SizedBox.shrink());
   });
 
-  testWidgets('bottom navigation opens live history and settings', (
+  testWidgets('bottom navigation opens exercise, history and settings', (
     tester,
   ) async {
     await tester.pumpWidget(const Esp32App(requestBluetoothOnLaunch: false));
@@ -68,8 +68,17 @@ void main() {
 
     expect(find.text('홈'), findsOneWidget);
     expect(find.text('기기'), findsNothing);
+    expect(find.text('운동'), findsOneWidget);
     expect(find.text('기록'), findsOneWidget);
     expect(find.text('설정'), findsOneWidget);
+
+    await tester.tap(find.text('운동'));
+    await tester.pumpAndSettle();
+    expect(find.text('오늘의 추천 운동'), findsOneWidget);
+    expect(find.text('앉아서 하는 전신 스트레칭'), findsOneWidget);
+    expect(find.text('운동 영상 1'), findsOneWidget);
+    expect(find.text('운동 영상 2'), findsOneWidget);
+    expect(find.text('준비 중'), findsWidgets);
 
     await tester.tap(find.text('기록'));
     await tester.pumpAndSettle();

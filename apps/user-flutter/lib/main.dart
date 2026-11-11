@@ -12,6 +12,7 @@ import 'package:http/http.dart' as http;
 import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import 'firebase_options.dart';
 import 'firebase_web_registration.dart';
@@ -783,6 +784,7 @@ class _BleTerminalPageState extends State<BleTerminalPage> {
 
   final _devices = <DeviceIdentifier, ScanResult>{};
   final _scanGuideKey = GlobalKey();
+  final _exerciseGuideKey = GlobalKey();
   final _historyGuideKey = GlobalKey();
   final _settingsGuideKey = GlobalKey();
 
@@ -919,6 +921,11 @@ class _BleTerminalPageState extends State<BleTerminalPage> {
         targetKey: _scanGuideKey,
         title: '방석을 연결해 보세요',
         description: 'QR 코드를 스캔하면 내 방석을 빠르게 찾아 연결할 수 있어요.',
+      ),
+      _CoachMarkStep(
+        targetKey: _exerciseGuideKey,
+        title: '운동을 따라 해보세요',
+        description: '자세 관리에 도움이 되는 운동과 영상을 모아두었어요.',
       ),
       _CoachMarkStep(
         targetKey: _historyGuideKey,
@@ -1316,7 +1323,7 @@ class _BleTerminalPageState extends State<BleTerminalPage> {
       );
     }
     _scheduleDailyHistorySave();
-    if (mounted && _selectedTab == 1) setState(() {});
+    if (mounted && _selectedTab == 2) setState(() {});
   }
 
   Future<bool> _requestPermissions() async {
@@ -1863,8 +1870,9 @@ class _BleTerminalPageState extends State<BleTerminalPage> {
   @override
   Widget build(BuildContext context) {
     final pageTitle = switch (_selectedTab) {
-      1 => '자세 기록',
-      2 => '설정',
+      1 => '운동',
+      2 => '자세 기록',
+      3 => '설정',
       _ => 'ESP32 압력 모니터',
     };
     return Scaffold(
@@ -1913,10 +1921,12 @@ class _BleTerminalPageState extends State<BleTerminalPage> {
                 ],
                 const SizedBox(height: 20),
               ],
-              if (_selectedTab == 2) ...[
+              if (_selectedTab == 3) ...[
                 Expanded(child: _buildSettingsTab(context)),
-              ] else if (_selectedTab == 1) ...[
+              ] else if (_selectedTab == 2) ...[
                 Expanded(child: _buildHistoryTab(context)),
+              ] else if (_selectedTab == 1) ...[
+                Expanded(child: _buildExerciseTab(context)),
               ] else if (!_isConnected) ...[
                 Row(
                   children: [
@@ -2126,6 +2136,12 @@ class _BleTerminalPageState extends State<BleTerminalPage> {
             label: '홈',
           ),
           NavigationDestination(
+            key: _exerciseGuideKey,
+            icon: const Icon(Icons.fitness_center_outlined),
+            selectedIcon: const Icon(Icons.fitness_center_rounded),
+            label: '운동',
+          ),
+          NavigationDestination(
             key: _historyGuideKey,
             icon: const Icon(Icons.insights_outlined),
             selectedIcon: const Icon(Icons.insights_rounded),
@@ -2140,6 +2156,73 @@ class _BleTerminalPageState extends State<BleTerminalPage> {
         ],
       ),
     );
+  }
+
+  Widget _buildExerciseTab(BuildContext context) {
+    const exercises = [
+      _ExercisePlan(
+        title: '앉아서 하는 전신 스트레칭',
+        description: '목, 어깨, 허리의 긴장을 천천히 풀어주는 시연용 루틴입니다.',
+        duration: '약 10분',
+        icon: Icons.accessibility_new_rounded,
+        videoUrls: [
+          'https://www.youtube.com/watch?v=4oIm3hNciOk',
+          'https://www.youtube.com/watch?v=gQsK1MkB2Kw&list=PLhX8wfGt4L7PERyKZ00DzCwZI0DbbqNFD&index=2',
+        ],
+      ),
+      _ExercisePlan(
+        title: '목과 어깨 이완',
+        description: '오래 앉아 있을 때 뭉치기 쉬운 목과 어깨를 부드럽게 움직여요.',
+        duration: '약 5분',
+        icon: Icons.self_improvement_rounded,
+      ),
+      _ExercisePlan(
+        title: '옆구리 늘리기',
+        description: '좌우 균형을 의식하며 몸통의 가동 범위를 넓혀요.',
+        duration: '약 4분',
+        icon: Icons.airline_seat_recline_extra_rounded,
+      ),
+      _ExercisePlan(
+        title: '발목 순환 운동',
+        description: '발목을 천천히 돌리고 당기며 하체 순환을 도와요.',
+        duration: '약 6분',
+        icon: Icons.directions_walk_rounded,
+      ),
+      _ExercisePlan(
+        title: '호흡과 자세 정렬',
+        description: '깊은 호흡과 함께 편안한 정자세를 찾아가는 루틴이에요.',
+        duration: '약 7분',
+        icon: Icons.spa_outlined,
+      ),
+    ];
+
+    return ListView(
+      children: [
+        Text(
+          '오늘의 추천 운동',
+          style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900),
+        ),
+        const SizedBox(height: 4),
+        const Text(
+          '무리하지 말고 편안한 범위에서 천천히 따라 해보세요.',
+          style: TextStyle(color: Color(0xff6f7482), height: 1.4),
+        ),
+        const SizedBox(height: 16),
+        for (final exercise in exercises) ...[
+          _ExerciseCard(exercise: exercise, onOpenVideo: _openExerciseVideo),
+          const SizedBox(height: 12),
+        ],
+      ],
+    );
+  }
+
+  Future<void> _openExerciseVideo(String url) async {
+    final opened = await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
+    if (!opened && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('운동 영상을 열 수 없습니다. 잠시 후 다시 시도해 주세요.')),
+      );
+    }
   }
 
   Widget _buildHistoryTab(BuildContext context) {
@@ -4779,6 +4862,103 @@ class _CountBadge extends StatelessWidget {
         color: AppColors.ink,
         fontSize: 12,
         fontWeight: FontWeight.w800,
+      ),
+    ),
+  );
+}
+
+class _ExercisePlan {
+  const _ExercisePlan({
+    required this.title,
+    required this.description,
+    required this.duration,
+    required this.icon,
+    this.videoUrls = const [],
+  });
+
+  final String title;
+  final String description;
+  final String duration;
+  final IconData icon;
+  final List<String> videoUrls;
+}
+
+class _ExerciseCard extends StatelessWidget {
+  const _ExerciseCard({required this.exercise, required this.onOpenVideo});
+
+  final _ExercisePlan exercise;
+  final ValueChanged<String> onOpenVideo;
+
+  @override
+  Widget build(BuildContext context) => Card(
+    child: Padding(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: 46,
+                height: 46,
+                decoration: BoxDecoration(
+                  color: AppColors.selected,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Icon(exercise.icon, color: AppColors.corporateYellow),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      exercise.title,
+                      style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w900),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      exercise.duration,
+                      style: const TextStyle(
+                        color: AppColors.corporateYellow,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              if (exercise.videoUrls.isEmpty)
+                const Chip(
+                  visualDensity: VisualDensity.compact,
+                  label: Text('준비 중', style: TextStyle(fontSize: 11)),
+                ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Text(
+            exercise.description,
+            style: const TextStyle(color: Color(0xff5f6470), height: 1.45),
+          ),
+          if (exercise.videoUrls.isNotEmpty) ...[
+            const SizedBox(height: 14),
+            Row(
+              children: [
+                for (var index = 0; index < exercise.videoUrls.length; index++) ...[
+                  if (index > 0) const SizedBox(width: 8),
+                  Expanded(
+                    child: FilledButton.icon(
+                      onPressed: () => onOpenVideo(exercise.videoUrls[index]),
+                      icon: const Icon(Icons.play_circle_fill_rounded, size: 20),
+                      label: Text('운동 영상 ${index + 1}'),
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ],
+        ],
       ),
     ),
   );
