@@ -13,6 +13,7 @@ import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:youtube_player_iframe/youtube_player_iframe.dart';
 
 import 'firebase_options.dart';
 import 'firebase_web_registration.dart';
@@ -556,16 +557,17 @@ class _LoginPageState extends State<LoginPage> {
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    const Center(child: SeatCareCushionIcon(size: 68)),
-                    const SizedBox(height: 16),
-                    Text(
-                      'SEAT CARE',
-                      textAlign: TextAlign.center,
-                      style: Theme.of(
-                        context,
-                      ).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w900),
+                    Semantics(
+                      label: 'seatcare',
+                      image: true,
+                      child: Image.asset(
+                        'assets/images/seatcare_logo.png',
+                        height: 96,
+                        fit: BoxFit.contain,
+                        filterQuality: FilterQuality.high,
+                      ),
                     ),
-                    const SizedBox(height: 6),
+                    const SizedBox(height: 10),
                     const Text(
                       '계정으로 로그인하세요',
                       textAlign: TextAlign.center,
@@ -668,103 +670,17 @@ class SeatCareCushionIcon extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Semantics(
-    label: 'Seat Care 방석',
+    label: 'Seatcare 서비스 아이콘',
     image: true,
-    child: SizedBox(
-      width: size,
-      height: size * .72,
-      child: const CustomPaint(painter: _SeatCareCushionPainter()),
+    child: SizedBox.square(
+      dimension: size,
+      child: Image.asset(
+        'assets/images/seatcare_mark.png',
+        fit: BoxFit.contain,
+        filterQuality: FilterQuality.high,
+      ),
     ),
   );
-}
-
-class _SeatCareCushionPainter extends CustomPainter {
-  const _SeatCareCushionPainter();
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final silhouette = Paint()
-      ..color = Colors.black
-      ..style = PaintingStyle.fill;
-    final shape = Path()
-      ..moveTo(size.width * .19, size.height * .07)
-      ..quadraticBezierTo(
-        size.width * .50,
-        -size.height * .01,
-        size.width * .81,
-        size.height * .07,
-      )
-      ..quadraticBezierTo(
-        size.width * .95,
-        size.height * .12,
-        size.width * .91,
-        size.height * .32,
-      )
-      ..lineTo(size.width * .83, size.height * .82)
-      ..quadraticBezierTo(
-        size.width * .80,
-        size.height * .97,
-        size.width * .64,
-        size.height * .94,
-      )
-      ..quadraticBezierTo(
-        size.width * .50,
-        size.height * .89,
-        size.width * .36,
-        size.height * .94,
-      )
-      ..quadraticBezierTo(
-        size.width * .20,
-        size.height * .97,
-        size.width * .17,
-        size.height * .82,
-      )
-      ..lineTo(size.width * .09, size.height * .32)
-      ..quadraticBezierTo(
-        size.width * .05,
-        size.height * .12,
-        size.width * .19,
-        size.height * .07,
-      )
-      ..close();
-    canvas.drawPath(shape, silhouette);
-
-    final seam = Paint()
-      ..color = Colors.white.withValues(alpha: .58)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = size.width * .025
-      ..strokeCap = StrokeCap.round;
-    final inset = Path()
-      ..moveTo(size.width * .21, size.height * .27)
-      ..quadraticBezierTo(
-        size.width * .50,
-        size.height * .19,
-        size.width * .79,
-        size.height * .27,
-      )
-      ..quadraticBezierTo(
-        size.width * .76,
-        size.height * .55,
-        size.width * .69,
-        size.height * .76,
-      )
-      ..quadraticBezierTo(
-        size.width * .50,
-        size.height * .69,
-        size.width * .31,
-        size.height * .76,
-      )
-      ..quadraticBezierTo(
-        size.width * .24,
-        size.height * .55,
-        size.width * .21,
-        size.height * .27,
-      );
-    canvas.drawPath(inset, seam);
-  }
-
-  @override
-  bool shouldRepaint(covariant _SeatCareCushionPainter oldDelegate) => false;
 }
 
 class BleTerminalPage extends StatefulWidget {
@@ -823,6 +739,7 @@ class _BleTerminalPageState extends State<BleTerminalPage> {
   bool _remoteNotificationBusy = false;
   bool _remotePopupOpen = false;
   final Set<String> _seenRemoteNotifications = {};
+  final List<Map<String, dynamic>> _pendingRemoteEvents = [];
   final String _remoteSessionId = 'session-${DateTime.now().microsecondsSinceEpoch}';
   int _remoteSequence = 0;
   AlertSensitivity _alertSensitivity = AlertSensitivity.high;
@@ -1040,6 +957,9 @@ class _BleTerminalPageState extends State<BleTerminalPage> {
           : values!.fold<int>(0, (sum, value) => sum + value) < 80
           ? 'unloaded'
           : 'seated';
+      final pendingEvents = _pendingRemoteEvents
+          .map((event) => Map<String, dynamic>.from(event))
+          .toList(growable: false);
       final response = await http
           .post(
             Uri.parse(_remoteEndpoint!),
@@ -1068,13 +988,17 @@ class _BleTerminalPageState extends State<BleTerminalPage> {
                 'baseline': null,
                 'bias': const <String>[],
               },
-              'events': const <Map<String, dynamic>>[],
+              'events': pendingEvents,
             }),
           )
           .timeout(const Duration(seconds: 12));
       final data = jsonDecode(response.body) as Map<String, dynamic>;
       if (response.statusCode != 200 || data['role'] != 'worker') {
         throw StateError(data['error'] as String? ?? '사용자용 초대 링크를 확인해 주세요.');
+      }
+      final acceptedIds = (data['acceptedIds'] as List? ?? const []).whereType<String>().toSet();
+      if (acceptedIds.isNotEmpty) {
+        _pendingRemoteEvents.removeWhere((event) => acceptedIds.contains(event['id']));
       }
       final state = data['state'] as Map<String, dynamic>? ?? const {};
       final notifications = (state['notifications'] as List? ?? const [])
@@ -1724,11 +1648,33 @@ class _BleTerminalPageState extends State<BleTerminalPage> {
     _posturePopupOpen = true;
     _lastNotifiedLean = lean;
     _lastPostureNotificationAt = DateTime.now();
-    await showDialog<void>(
+    final action = await showDialog<PostureAlertAction>(
       context: context,
       builder: (dialogContext) => PostureAlertDialog(message: message),
     );
     _posturePopupOpen = false;
+    if (action == null) return;
+    final needsHelp = action == PostureAlertAction.requestHelp;
+    _queueRemoteEvent(
+      type: needsHelp ? 'help_requested' : 'alert_acknowledged',
+      detail: needsHelp
+          ? '사용자가 자세 교정을 위해 관리자의 도움을 요청했어요. $message'
+          : '사용자가 자세를 직접 조정하겠다고 응답했어요. $message',
+    );
+    unawaited(_pollRemoteNotifications());
+  }
+
+  void _queueRemoteEvent({required String type, required String detail}) {
+    final at = DateTime.now();
+    _pendingRemoteEvents.add({
+      'id': 'event-${at.microsecondsSinceEpoch}',
+      'sessionId': _remoteSessionId,
+      'source': 'sensor',
+      'type': type,
+      'at': at.millisecondsSinceEpoch,
+      'detail': detail,
+    });
+    if (_pendingRemoteEvents.length > 20) _pendingRemoteEvents.removeAt(0);
   }
 
   Future<void> _requestCalibrationStatus() async {
@@ -1976,6 +1922,7 @@ class _BleTerminalPageState extends State<BleTerminalPage> {
                       child: SizedBox(
                         height: 52,
                         child: FilledButton.icon(
+                          key: _scanGuideKey,
                           onPressed: _isScanning || _isConnecting
                               ? null
                               : _pendingDeviceCode == null
@@ -1989,7 +1936,6 @@ class _BleTerminalPageState extends State<BleTerminalPage> {
                                   ),
                                 )
                               : Icon(
-                                  key: _scanGuideKey,
                                   _pendingDeviceCode == null
                                       ? Icons.qr_code_scanner_rounded
                                       : Icons.bluetooth_searching_rounded,
@@ -2137,8 +2083,8 @@ class _BleTerminalPageState extends State<BleTerminalPage> {
           ),
           NavigationDestination(
             key: _exerciseGuideKey,
-            icon: const Icon(Icons.fitness_center_outlined),
-            selectedIcon: const Icon(Icons.fitness_center_rounded),
+            icon: const SeatCareCushionIcon(size: 24),
+            selectedIcon: const SeatCareCushionIcon(size: 26),
             label: '운동',
           ),
           NavigationDestination(
@@ -2165,9 +2111,18 @@ class _BleTerminalPageState extends State<BleTerminalPage> {
         description: '목, 어깨, 허리의 긴장을 천천히 풀어주는 시연용 루틴입니다.',
         duration: '약 10분',
         icon: Icons.accessibility_new_rounded,
-        videoUrls: [
-          'https://www.youtube.com/watch?v=4oIm3hNciOk',
-          'https://www.youtube.com/watch?v=gQsK1MkB2Kw&list=PLhX8wfGt4L7PERyKZ00DzCwZI0DbbqNFD&index=2',
+        videos: [
+          _ExerciseVideo(
+            title: '운동 영상 1',
+            videoId: '4oIm3hNciOk',
+            url: 'https://www.youtube.com/watch?v=4oIm3hNciOk',
+          ),
+          _ExerciseVideo(
+            title: '운동 영상 2',
+            videoId: 'gQsK1MkB2Kw',
+            url:
+                'https://www.youtube.com/watch?v=gQsK1MkB2Kw&list=PLhX8wfGt4L7PERyKZ00DzCwZI0DbbqNFD&index=2',
+          ),
         ],
       ),
       _ExercisePlan(
@@ -2197,6 +2152,7 @@ class _BleTerminalPageState extends State<BleTerminalPage> {
     ];
 
     return ListView(
+      key: const PageStorageKey('exercise-list'),
       children: [
         Text(
           '오늘의 추천 운동',
@@ -2209,7 +2165,11 @@ class _BleTerminalPageState extends State<BleTerminalPage> {
         ),
         const SizedBox(height: 16),
         for (final exercise in exercises) ...[
-          _ExerciseCard(exercise: exercise, onOpenVideo: _openExerciseVideo),
+          _ExerciseCard(
+            exercise: exercise,
+            onPreviewVideo: _showExercisePreview,
+            onOpenVideo: _openExerciseVideo,
+          ),
           const SizedBox(height: 12),
         ],
       ],
@@ -2225,6 +2185,11 @@ class _BleTerminalPageState extends State<BleTerminalPage> {
     }
   }
 
+  Future<void> _showExercisePreview(_ExerciseVideo video) => showDialog<void>(
+    context: context,
+    builder: (_) => _ExerciseVideoPreview(video: video),
+  );
+
   Widget _buildHistoryTab(BuildContext context) {
     final record = _dailyHistory[_dateKey(_selectedHistoryDate)];
     final today = DateUtils.dateOnly(DateTime.now());
@@ -2237,6 +2202,7 @@ class _BleTerminalPageState extends State<BleTerminalPage> {
     }
 
     return ListView(
+      key: const PageStorageKey('history-list'),
       children: [
         Text(
           '날짜별 기록',
@@ -2396,6 +2362,7 @@ class _BleTerminalPageState extends State<BleTerminalPage> {
       const ['월요일', '화요일', '수요일', '목요일', '금요일', '토요일', '일요일'][weekday - 1];
 
   Widget _buildSettingsTab(BuildContext context) => ListView(
+    key: const PageStorageKey('settings-list'),
     children: [
       _SettingsTile(
         icon: Icons.tune_rounded,
@@ -2481,6 +2448,8 @@ class _PostureWarning extends StatelessWidget {
   );
 }
 
+enum PostureAlertAction { adjustMyself, requestHelp }
+
 class PostureAlertDialog extends StatelessWidget {
   const PostureAlertDialog({super.key, required this.message});
 
@@ -2497,9 +2466,13 @@ class PostureAlertDialog extends StatelessWidget {
     content: Text(message, textAlign: TextAlign.center),
     actionsAlignment: MainAxisAlignment.center,
     actions: [
+      TextButton(
+        onPressed: () => Navigator.of(context).pop(PostureAlertAction.adjustMyself),
+        child: const Text('내가 조정할게요'),
+      ),
       FilledButton(
-        onPressed: () => Navigator.of(context).pop(),
-        child: const Text('확인'),
+        onPressed: () => Navigator.of(context).pop(PostureAlertAction.requestHelp),
+        child: const Text('관리자의 도움이 필요해요'),
       ),
     ],
   );
@@ -2541,12 +2514,12 @@ class CalibrationPanel extends StatelessWidget {
         ? calibrating
               ? '정자세 압력을 측정하고 있어요'
               : warning
-              ? '센서 상태를 확인해 주세요'
+              ? '측정을 다시 확인해 주세요'
               : '편안하게 앉아 주세요'
         : calibrating
         ? '영점값을 측정하고 있어요'
         : warning
-        ? '센서 상태를 확인해 주세요'
+        ? '측정을 다시 확인해 주세요'
         : '욕창방석만 올려주세요.';
     final description = checking
         ? 'ESP32에 저장된 최초 보정 정보를 불러옵니다.'
@@ -2554,12 +2527,12 @@ class CalibrationPanel extends StatelessWidget {
         ? calibrating
               ? '측정이 끝날 때까지 편안한 정자세를 유지하세요.'
               : warning
-              ? '일부 센서 반응이 기준 범위를 벗어났습니다.'
+              ? '방석 중앙에 편안히 앉은 뒤 다시 측정해 주세요.'
               : '평소 자세로 앉아 5초간 유지해 주세요.'
         : calibrating
         ? '측정이 끝날 때까지 방석을 누르지 마세요.'
         : warning
-        ? '일부 센서의 무부하 값이 기준 범위를 벗어났습니다.'
+        ? '방석 위를 비운 뒤 다시 측정해 주세요.'
         : '방석 위의 사람과 물건을 치워 주세요.';
     final stepLabel = balance ? '2 / 2' : '1 / 2';
     return LayoutBuilder(
@@ -2666,7 +2639,6 @@ class CalibrationPanel extends StatelessWidget {
                           Padding(
                             padding: const EdgeInsets.only(bottom: 18),
                             child: _CalibrationWarning(
-                              sensors: warningSensors,
                               isZeroWarning: status == CalibrationStatus.zeroWarning,
                               onRetry: balance ? onStartBalance : onStartZero,
                               onContinue: onContinueWarning,
@@ -2712,32 +2684,20 @@ class CalibrationPanel extends StatelessWidget {
 
 class _CalibrationWarning extends StatelessWidget {
   const _CalibrationWarning({
-    required this.sensors,
     required this.isZeroWarning,
     required this.onRetry,
     required this.onContinue,
   });
 
-  final List<int> sensors;
   final bool isZeroWarning;
   final VoidCallback onRetry;
   final VoidCallback onContinue;
 
   @override
   Widget build(BuildContext context) {
-    final suspectedSensors = sensors
-        .where(
-          (sensor) => sensor >= 1 && sensor <= PressureField.sensorLabels.length,
-        )
-        .map((sensor) {
-          final index = sensor - 1;
-          return '${PressureField.sensorLabels[index]} · S$sensor · ${PressureField.sensorLocationNames[index]}';
-        })
-        .toList(growable: false);
-    final sensorLabel = suspectedSensors.isEmpty ? '일부 센서' : suspectedSensors.join(', ');
     final message = isZeroWarning
-        ? '영점값이 정상 범위를 벗어났습니다. 무부하 센서가 있어도 그냥 계속하시겠습니까?'
-        : '하중이 감지되지 않았습니다. 무부하 센서가 있어도 그냥 계속하시겠습니까?';
+        ? '방석 위에 사람이나 물건이 없는지 확인해 주세요.'
+        : '방석 중앙에 편안한 자세로 앉아 있는지 확인해 주세요.';
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(14),
@@ -2748,31 +2708,13 @@ class _CalibrationWarning extends StatelessWidget {
       ),
       child: Column(
         children: [
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-            decoration: BoxDecoration(
-              color: const Color(0xffffdddd),
-              borderRadius: BorderRadius.circular(6),
-            ),
-            child: Text(
-              '고장 의심 센서: $sensorLabel',
-              textAlign: TextAlign.center,
-              style: const TextStyle(
-                color: Color(0xff9f1c1c),
-                fontSize: 14,
-                fontWeight: FontWeight.w900,
-              ),
-            ),
-          ),
-          const SizedBox(height: 10),
           Row(
             children: [
               const Icon(Icons.warning_amber_rounded, color: Color(0xff8a6500)),
               const SizedBox(width: 9),
               Expanded(
                 child: Text(
-                  '$message 계속 진행하면 위 센서는 기본 보정값으로 사용됩니다.',
+                  '$message 다시 측정하거나 현재 값으로 계속 진행할 수 있어요.',
                   style: const TextStyle(
                     color: Color(0xff644c00),
                     fontSize: 13,
@@ -4873,20 +4815,33 @@ class _ExercisePlan {
     required this.description,
     required this.duration,
     required this.icon,
-    this.videoUrls = const [],
+    this.videos = const [],
   });
 
   final String title;
   final String description;
   final String duration;
   final IconData icon;
-  final List<String> videoUrls;
+  final List<_ExerciseVideo> videos;
+}
+
+class _ExerciseVideo {
+  const _ExerciseVideo({required this.title, required this.videoId, required this.url});
+
+  final String title;
+  final String videoId;
+  final String url;
 }
 
 class _ExerciseCard extends StatelessWidget {
-  const _ExerciseCard({required this.exercise, required this.onOpenVideo});
+  const _ExerciseCard({
+    required this.exercise,
+    required this.onPreviewVideo,
+    required this.onOpenVideo,
+  });
 
   final _ExercisePlan exercise;
+  final ValueChanged<_ExerciseVideo> onPreviewVideo;
   final ValueChanged<String> onOpenVideo;
 
   @override
@@ -4929,7 +4884,7 @@ class _ExerciseCard extends StatelessWidget {
                   ],
                 ),
               ),
-              if (exercise.videoUrls.isEmpty)
+              if (exercise.videos.isEmpty)
                 const Chip(
                   visualDensity: VisualDensity.compact,
                   label: Text('준비 중', style: TextStyle(fontSize: 11)),
@@ -4941,24 +4896,164 @@ class _ExerciseCard extends StatelessWidget {
             exercise.description,
             style: const TextStyle(color: Color(0xff5f6470), height: 1.45),
           ),
-          if (exercise.videoUrls.isNotEmpty) ...[
+          if (exercise.videos.isNotEmpty) ...[
             const SizedBox(height: 14),
-            Row(
-              children: [
-                for (var index = 0; index < exercise.videoUrls.length; index++) ...[
-                  if (index > 0) const SizedBox(width: 8),
-                  Expanded(
-                    child: FilledButton.icon(
-                      onPressed: () => onOpenVideo(exercise.videoUrls[index]),
-                      icon: const Icon(Icons.play_circle_fill_rounded, size: 20),
-                      label: Text('운동 영상 ${index + 1}'),
-                    ),
-                  ),
-                ],
-              ],
-            ),
+            for (var index = 0; index < exercise.videos.length; index++) ...[
+              if (index > 0) const SizedBox(height: 12),
+              _ExerciseVideoCard(
+                video: exercise.videos[index],
+                onPreview: () => onPreviewVideo(exercise.videos[index]),
+                onOpen: () => onOpenVideo(exercise.videos[index].url),
+              ),
+            ],
           ],
         ],
+      ),
+    ),
+  );
+}
+
+class _ExerciseVideoCard extends StatelessWidget {
+  const _ExerciseVideoCard({
+    required this.video,
+    required this.onPreview,
+    required this.onOpen,
+  });
+
+  final _ExerciseVideo video;
+  final VoidCallback onPreview;
+  final VoidCallback onOpen;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    decoration: BoxDecoration(
+      color: AppColors.selected,
+      borderRadius: BorderRadius.circular(14),
+      border: Border.all(color: AppColors.border),
+    ),
+    clipBehavior: Clip.antiAlias,
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        AspectRatio(
+          aspectRatio: 16 / 9,
+          child: InkWell(
+            key: Key('preview-${video.videoId}'),
+            onTap: onPreview,
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                Image.network(
+                  'https://i.ytimg.com/vi/${video.videoId}/hqdefault.jpg',
+                  fit: BoxFit.cover,
+                  errorBuilder: (_, _, _) => const ColoredBox(color: Color(0xffdbe4f0)),
+                ),
+                const ColoredBox(color: Color(0x30000000)),
+                const Center(
+                  child: CircleAvatar(
+                    radius: 29,
+                    backgroundColor: Colors.white,
+                    child: Icon(
+                      Icons.play_arrow_rounded,
+                      size: 40,
+                      color: AppColors.corporateYellow,
+                    ),
+                  ),
+                ),
+                const Positioned(
+                  right: 10,
+                  bottom: 10,
+                  child: Chip(
+                    avatar: Icon(Icons.visibility_outlined, size: 16),
+                    label: Text('미리보기'),
+                    visualDensity: VisualDensity.compact,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(14, 12, 8, 10),
+          child: Row(
+            children: [
+              const SeatCareCushionIcon(size: 25),
+              const SizedBox(width: 9),
+              Expanded(
+                child: Text(video.title, style: const TextStyle(fontWeight: FontWeight.w900)),
+              ),
+              TextButton.icon(
+                onPressed: onOpen,
+                icon: const Icon(Icons.open_in_new_rounded, size: 17),
+                label: const Text('YouTube'),
+              ),
+            ],
+          ),
+        ),
+      ],
+    ),
+  );
+}
+
+class _ExerciseVideoPreview extends StatefulWidget {
+  const _ExerciseVideoPreview({required this.video});
+
+  final _ExerciseVideo video;
+
+  @override
+  State<_ExerciseVideoPreview> createState() => _ExerciseVideoPreviewState();
+}
+
+class _ExerciseVideoPreviewState extends State<_ExerciseVideoPreview> {
+  late final YoutubePlayerController _controller = YoutubePlayerController.fromVideoId(
+    videoId: widget.video.videoId,
+    autoPlay: false,
+    params: const YoutubePlayerParams(
+      showControls: true,
+      showFullscreenButton: true,
+      interfaceLanguage: 'ko',
+    ),
+  );
+
+  @override
+  void dispose() {
+    _controller.close();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => Dialog(
+    insetPadding: const EdgeInsets.symmetric(horizontal: 18),
+    child: ConstrainedBox(
+      constraints: const BoxConstraints(maxWidth: 760),
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const SeatCareCushionIcon(size: 25),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    widget.video.title,
+                    style: const TextStyle(fontWeight: FontWeight.w900),
+                  ),
+                ),
+                IconButton(
+                  key: const Key('close-video-preview'),
+                  onPressed: () => Navigator.of(context).pop(),
+                  tooltip: '미리보기 닫기',
+                  icon: const Icon(Icons.close_rounded),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            YoutubePlayer(controller: _controller, aspectRatio: 16 / 9),
+          ],
+        ),
       ),
     ),
   );

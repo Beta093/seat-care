@@ -18,7 +18,10 @@ void main() {
   ) async {
     await tester.pumpWidget(const MaterialApp(home: LoginPage()));
 
-    expect(find.byType(SeatCareCushionIcon), findsOneWidget);
+    expect(
+      find.image(const AssetImage('assets/images/seatcare_logo.png')),
+      findsOneWidget,
+    );
     expect(find.text('Google로 계속하기'), findsOneWidget);
     expect(find.text('Apple로 계속하기'), findsOneWidget);
     expect(find.text('기기 권한 확인'), findsNothing);
@@ -78,6 +81,10 @@ void main() {
     expect(find.text('앉아서 하는 전신 스트레칭'), findsOneWidget);
     expect(find.text('운동 영상 1'), findsOneWidget);
     expect(find.text('운동 영상 2'), findsOneWidget);
+    expect(find.text('미리보기'), findsNWidgets(2));
+
+    await tester.drag(find.byType(ListView), const Offset(0, -900));
+    await tester.pumpAndSettle();
     expect(find.text('준비 중'), findsWidgets);
 
     await tester.tap(find.text('기록'));
@@ -266,7 +273,8 @@ void main() {
 
     expect(find.text('자세를 바로잡아 주세요'), findsOneWidget);
     expect(find.textContaining('왼쪽으로 치우쳐'), findsOneWidget);
-    expect(find.text('확인'), findsOneWidget);
+    expect(find.text('내가 조정할게요'), findsOneWidget);
+    expect(find.text('관리자의 도움이 필요해요'), findsOneWidget);
   });
 
   test('normalizes ESP32 barcode device codes', () {
@@ -450,7 +458,7 @@ void main() {
   });
 
   testWidgets(
-    'allows continuing when seated calibration has unloaded sensors',
+    'allows continuing after seated calibration needs another check',
     (tester) async {
       var continued = false;
       await tester.pumpWidget(
@@ -472,8 +480,8 @@ void main() {
         ),
       );
 
-      expect(find.textContaining('무부하 센서가 있어도 그냥 계속하시겠습니까?'), findsOneWidget);
-      expect(find.text('고장 의심 센서: L2 · S3 · 왼쪽 뒤'), findsOneWidget);
+      expect(find.textContaining('방석 중앙에 편안한 자세로'), findsOneWidget);
+      expect(find.textContaining('고장 의심 센서'), findsNothing);
       await tester.ensureVisible(find.text('그래도 계속 진행'));
       await tester.tap(find.text('그래도 계속 진행'));
       expect(continued, isTrue);

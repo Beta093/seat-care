@@ -46,6 +46,7 @@ dependencies:
   shared_preferences: ^2.5.6
   http: ^1.5.0
   url_launcher: ^6.3.2
+  youtube_player_iframe: ^6.0.2
 
 dev_dependencies:
   flutter_test:
@@ -72,6 +73,8 @@ flutter:
   assets:
     - assets/images/cushion.png
     - assets/images/google_g.png
+    - assets/images/seatcare_mark.png
+    - assets/images/seatcare_logo.png
 
   # To add assets to your application, add an assets section, like this:
   # assets:
